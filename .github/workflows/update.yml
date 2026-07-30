@@ -1,0 +1,55 @@
+name: 更新斗鱼直播源 M3U
+
+on:
+  schedule:
+    - cron: '*/25 * * * *'   # 每25分钟运行一次
+  workflow_dispatch:          # 支持手动触发
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python 环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 安装依赖
+        run: |
+          pip install requests PyExecJS
+
+      - name: 生成 M3U 文件
+        run: python generator.py --direct
+        timeout-minutes: 8
+
+      - name: 上传 M3U 为 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: douyu-m3u
+          path: douyu_yqk.m3u
+          retention-days: 7
+
+      - name: 准备 Pages 发布目录
+        run: |
+          mkdir -p public
+          cp douyu_yqk.m3u public/
+          cp index.html public/ || true
+          echo "douyu_yqk.m3u" > public/CNAME || true
+
+      - name: 部署到 GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          publish_branch: gh-pages
+          force_orphan: true
