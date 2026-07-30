@@ -272,7 +272,8 @@ def fetch_room_list(cate2_id=CATE2_ID, cate3_filter=CATE3_FILTER,
 # ============================================================
 
 def generate_m3u(rooms, proxy_template=None, use_direct=False,
-                 output_path=None, local_server_url=None, max_rooms=0):
+                 output_path=None, local_server_url=None, max_rooms=0,
+                 worker_url=None):
     """
     生成 M3U 格式的直播源文件。
 
@@ -284,6 +285,9 @@ def generate_m3u(rooms, proxy_template=None, use_direct=False,
         local_server_url: 本地代理地址前缀，如 http://192.168.1.100:8080
                           生成 URL: {local_server_url}/douyu/{room_id}
         max_rooms: 最多解析的房间数量，0 表示不限制
+        worker_url: Cloudflare Worker 代理地址前缀，如 https://xxx.workers.dev
+                    生成 URL: {worker_url}/douyu/{room_id}
+                    Worker 负责解析真实流并代理 HLS（添加 Referer）
 
     Returns:
         (valid_count, update_time, m3u_content)
@@ -320,6 +324,9 @@ def generate_m3u(rooms, proxy_template=None, use_direct=False,
         elif local_server_url:
             # 指向本地代理服务器
             stream_url = f"{local_server_url}/douyu/{rid}"
+        elif worker_url:
+            # 指向 Cloudflare Worker 代理（推荐用于电视端）
+            stream_url = f"{worker_url}/douyu/{rid}"
         elif proxy_template:
             # 外部代理（可能已失效）
             stream_url = proxy_template.format(room_id=rid)
@@ -578,6 +585,11 @@ def main():
         help="自定义外部流代理模板（已失效，不推荐）",
     )
     parser.add_argument(
+        "--worker-url", type=str, default=None, metavar="URL",
+        help="Cloudflare Worker 代理地址（如 https://xxx.workers.dev），"
+             "M3U 中的频道 URL 将指向 Worker 代理以解决电视端 Referer 问题",
+    )
+    parser.add_argument(
         "--pages", type=int, default=MAX_PAGES,
         help=f"最大获取页数 (默认: {MAX_PAGES}，约{MAX_PAGES * 120}个频道)",
     )
@@ -630,6 +642,15 @@ def main():
         server_url = f"http://{local_ip}:8080"
         valid_count, update_time, _ = generate_m3u(
             rooms, local_server_url=server_url, output_path=args.output,
+            max_rooms=args.max_rooms,
+        )
+    elif args.worker_url:
+        worker_url = args.worker_url.rstrip("/")
+        print(f"[INFO] 使用 Worker 代理: {worker_url}")
+        print("[INFO] Worker 负责解析真实流并代理 HLS（添加 Referer）")
+        print("[INFO] M3U 中的频道 URL 不会过期，Worker 实时解析。")
+        valid_count, update_time, _ = generate_m3u(
+            rooms, worker_url=worker_url, output_path=args.output,
             max_rooms=args.max_rooms,
         )
     else:
