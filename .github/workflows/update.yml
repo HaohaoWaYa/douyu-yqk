@@ -33,7 +33,7 @@ jobs:
 
       - name: 生成直播源 M3U
         run: |
-          python generator.py --worker-url "https://zhibo.longhao232.workers.dev" --max-rooms 120 -o douyu_yqk.m3u
+          python generator.py --worker-url "https://douyu-tv.longhao232.workers.dev"
         timeout-minutes: 5
 
       - name: 显示生成结果
